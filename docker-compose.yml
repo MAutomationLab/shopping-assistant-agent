@@ -1,0 +1,13 @@
+# Arize Phoenix: OpenTelemetry-native LLM trace viewer. UI + OTLP/HTTP on :6006, OTLP/gRPC on :4317
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+    volumes:
+      - phoenix-data:/mnt/data
+volumes:
+  phoenix-data:

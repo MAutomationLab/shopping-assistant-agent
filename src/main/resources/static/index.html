@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShopSmart Assistant</title>
+<style>
+/* Layout: two panes — conversation (left) and trace inspector (right); stacks on narrow screens */
+:root {
+  --bg: #f5f6f3;
+  --surface: #ffffff;
+  --ink: #1d2320;
+  --muted: #5d6862;
+  --line: #dde2dc;
+  --accent: #1f6b52;        /* shop green */
+  --accent-ink: #ffffff;
+  --user: #e6f0eb;
+  --ok: #1f7a4a;
+  --warn: #9a6200;
+  --err: #b3261e;
+  --err-bg: #fbeceb;
+  --code: #eef1ed;
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#121614; --surface:#1a201d; --ink:#e4e9e5; --muted:#9aa6a0; --line:#2c3531;
+          --accent:#4fb98f; --accent-ink:#0d1411; --user:#20302a; --ok:#5fcf93; --warn:#e0a84a;
+          --err:#f08a82; --err-bg:#3a1f1d; --code:#222a26; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font); }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+header { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 10px 16px;
+         background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.brand .dot.up { background: var(--ok); } .brand .dot.down { background: var(--err); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--code); color: var(--muted); white-space: nowrap; }
+.chip b { color: var(--ink); font-weight: 600; }
+.actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 5px 12px; border-radius: 6px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); min-height: 0; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; grid-template-rows: minmax(420px, 1fr) auto; } }
+
+/* Conversation */
+.chat { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; border-right: 1px solid var(--line); }
+.faults { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 16px; border-bottom: 1px dashed var(--line); font-size: 12px; color: var(--muted); }
+.faults label { display: inline-flex; gap: 4px; align-items: center; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); cursor: pointer; }
+.faults input:checked + span { color: var(--err); font-weight: 600; }
+.messages { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 78%; padding: 10px 14px; border-radius: 10px; white-space: pre-wrap; word-wrap: break-word; }
+.msg.user { align-self: flex-end; background: var(--user); }
+.msg.assistant { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); }
+.msg.error { align-self: stretch; max-width: none; background: var(--err-bg); color: var(--err); border: 1px solid var(--err); }
+.msg .sub { display: block; margin-top: 6px; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.typing { align-self: flex-start; color: var(--muted); font-style: italic; }
+.empty { margin: auto; text-align: center; color: var(--muted); max-width: 420px; display: grid; gap: 12px; }
+.suggestions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.suggestions button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.suggestions button:hover { border-color: var(--accent); color: var(--accent); }
+form.composer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--surface); }
+form.composer textarea { flex: 1; resize: none; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); min-height: 42px; max-height: 140px; }
+.counter { font-size: 11px; color: var(--muted); align-self: flex-end; font-variant-numeric: tabular-nums; }
+.counter.over { color: var(--err); font-weight: 600; }
+
+/* Trace inspector */
+.trace { overflow-y: auto; padding: 16px; display: grid; gap: 14px; align-content: start; background: var(--surface); }
+.trace h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.stat .k { font-size: 11px; color: var(--muted); }
+.stat .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; word-break: break-all; }
+.stat.wide { grid-column: 1 / -1; }
+.stat .v.mono { font-family: var(--mono); font-size: 12px; font-weight: 400; }
+.list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tool { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; }
+.tool .head { display: flex; justify-content: space-between; gap: 8px; }
+.tool .name { font-family: var(--mono); font-weight: 600; }
+.pill { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+.pill.OK { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.pill.ERROR, .pill.BLOCKED { background: color-mix(in srgb, var(--err) 18%, transparent); color: var(--err); }
+.tool code, .chunk { font-family: var(--mono); font-size: 12px; background: var(--code); padding: 6px 8px; border-radius: 6px; white-space: pre-wrap; word-break: break-word; }
+.timeline { display: grid; gap: 4px; }
+.span { display: grid; grid-template-columns: 78px minmax(0, 1fr) 64px; gap: 8px; align-items: center; font-size: 12px; }
+.span .type { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.span .bar { position: relative; height: 16px; background: var(--code); border-radius: 3px; }
+.span .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); min-width: 2px; }
+.span .bar i.TOOL { background: var(--warn); } .span .bar i.RETRIEVER { background: var(--muted); }
+.span .bar i.err { background: var(--err); }
+.span .ms { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.span .label { grid-column: 2 / 4; font-size: 11px; color: var(--muted); margin-top: -2px; }
+.muted { color: var(--muted); font-size: 12px; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><span class="dot" id="health-dot" data-testid="health-status" data-status="unknown"></span>ShopSmart Assistant</div>
+    <div class="meta">
+      <span class="chip">model <b id="model-name" data-testid="model-name">…</b></span>
+      <span class="chip">RAG <b id="rag-store" data-testid="rag-store">…</b></span>
+      <span class="chip">session <b id="session-id" data-testid="session-id">new</b></span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="new-session" data-testid="new-session-button" type="button">New chat</button>
+      <button class="btn" id="reset-data" data-testid="reset-data-button" type="button">Reset store data</button>
+      <a class="btn" href="http://localhost:6006" target="_blank" rel="noopener" data-testid="phoenix-link">Open Phoenix</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="chat" aria-label="Conversation">
+      <div class="faults" id="faults" data-testid="fault-panel" hidden>
+        <span>Inject fault:</span>
+      </div>
+      <div class="messages" id="messages" data-testid="message-list" aria-live="polite">
+        <div class="empty" id="empty-state" data-testid="empty-state">
+          <div><b>Ask about products, stock, orders or store policies.</b><br>Every answer shows its full trace on the right.</div>
+          <div class="suggestions" id="suggestions"></div>
+        </div>
+      </div>
+      <form class="composer" id="composer" data-testid="chat-form">
+        <textarea id="chat-input" data-testid="chat-input" rows="1" placeholder="e.g. Do you have the Nike Air Max in size 10?" aria-label="Message"></textarea>
+        <span class="counter" id="counter" data-testid="char-counter">0/2000</span>
+        <button class="btn primary" id="send" data-testid="send-button" type="submit">Send</button>
+      </form>
+    </section>
+
+    <aside class="trace" id="trace" data-testid="trace-panel" aria-label="Trace inspector">
+      <h2>Trace inspector</h2>
+      <p class="muted" id="trace-empty" data-testid="trace-empty">Send a message to see which tools the agent called, what it retrieved, and how long each step took.</p>
+      <div id="trace-body" hidden>
+        <div class="stats">
+          <div class="stat wide"><div class="k">Trace ID</div><div class="v mono" id="trace-id" data-testid="trace-id"></div></div>
+          <div class="stat"><div class="k">Latency</div><div class="v" id="trace-latency" data-testid="trace-latency"></div></div>
+          <div class="stat"><div class="k">LLM calls</div><div class="v" id="trace-llm-calls" data-testid="trace-llm-calls"></div></div>
+          <div class="stat"><div class="k">Tokens (in / out)</div><div class="v" id="trace-tokens" data-testid="trace-tokens"></div></div>
+          <div class="stat"><div class="k">Finish reason</div><div class="v" id="trace-finish" data-testid="trace-finish-reason"></div></div>
+        </div>
+        <h2 style="margin-top:14px">Tool calls</h2>
+        <ul class="list" id="tool-calls" data-testid="tool-call-list"></ul>
+        <h2 style="margin-top:14px">Retrieved context</h2>
+        <ul class="list" id="chunks" data-testid="retrieval-list"></ul>
+        <h2 style="margin-top:14px">Span timeline</h2>
+        <div class="timeline" id="timeline" data-testid="span-timeline"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+const MAX = 2000;
+const FAULTS = [
+  ["inventory_error", "Inventory down"], ["inventory_timeout", "Inventory slow"],
+  ["order_service_down", "Orders down"], ["poisoned_product", "Prompt injection"],
+  ["retrieval_empty", "No policy docs"],
+];
+const SUGGESTIONS = [
+  "Do you have the Nike Air Max in size 10?", "Is size 12 available?",
+  "What is your return policy for electronics?", "What is the status of order ORD-7788?",
+  "I want to cancel my order #ORD-4521",
+];
+const $ = (id) => document.getElementById(id);
+let sessionId = null;
+
+function el(tag, attrs = {}, text) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+async function loadHealth() {
+  try {
+    const h = await (await fetch("/health")).json();
+    $("health-dot").className = "dot up"; $("health-dot").dataset.status = "up";
+    $("model-name").textContent = h.model; $("rag-store").textContent = h.rag_store;
+    $("reset-data").disabled = !h.faults_enabled;
+    if (h.faults_enabled) {
+      const panel = $("faults"); panel.hidden = false;
+      for (const [code, label] of FAULTS) {
+        const l = el("label", { title: code });
+        const cb = el("input", { type: "checkbox", value: code, id: "fault-" + code, "data-testid": "fault-toggle-" + code });
+        l.append(cb, el("span", {}, label)); panel.append(l);
+      }
+    }
+  } catch {
+    $("health-dot").className = "dot down"; $("health-dot").dataset.status = "down";
+    $("model-name").textContent = "agent offline";
+  }
+}
+
+function addMessage(role, text, sub) {
+  $("empty-state")?.remove();
+  const m = el("div", { class: "msg " + role, "data-testid": "message-" + role }, text);
+  if (sub) m.append(el("span", { class: "sub" }, sub));
+  $("messages").append(m); m.scrollIntoView({ block: "end" });
+  return m;
+}
+
+function renderTrace(r) {
+  const t = r.trace || {};
+  $("trace-empty").hidden = true; $("trace-body").hidden = false;
+  $("trace-id").textContent = r.trace_id;
+  $("trace-latency").textContent = (t.total_latency_ms ?? "–") + " ms";
+  $("trace-llm-calls").textContent = t.llm_calls ?? "–";
+  $("trace-tokens").textContent = t.tokens ? `${t.tokens.input} / ${t.tokens.output}` : "–";
+  $("trace-finish").textContent = t.finish_reason ?? "–";
+
+  const tools = $("tool-calls"); tools.replaceChildren();
+  if (!r.tool_calls.length) tools.append(el("li", { class: "muted", "data-testid": "tool-call-none" }, "No tools called"));
+  r.tool_calls.forEach((c) => {
+    const li = el("li", { class: "tool", "data-testid": "tool-call-item", "data-tool": c.name, "data-status": c.status });
+    const head = el("div", { class: "head" });
+    head.append(el("span", { class: "name", "data-testid": "tool-call-name" }, c.name),
+                el("span", { class: "pill " + c.status, "data-testid": "tool-call-status" }, `${c.status} · ${c.latency_ms} ms`));
+    li.append(head, el("code", { "data-testid": "tool-call-args" }, JSON.stringify(c.args)),
+              el("code", { "data-testid": "tool-call-output" }, c.output ?? c.error ?? ""));
+    tools.append(li);
+  });
+
+  const chunks = $("chunks"); chunks.replaceChildren();
+  if (!r.retrieval_context.length) chunks.append(el("li", { class: "muted" }, "Nothing retrieved"));
+  r.retrieval_context.forEach((c) => chunks.append(el("li", { class: "chunk", "data-testid": "retrieval-chunk" }, c)));
+
+  const tl = $("timeline"); tl.replaceChildren();
+  const total = Math.max(t.total_latency_ms || 1, 1);
+  (t.spans || []).filter((s) => s.type !== "AGENT").forEach((s) => {
+    const row = el("div", { class: "span", "data-testid": "span-row", "data-span-type": s.type });
+    const bar = el("div", { class: "bar" });
+    const i = el("i", { class: s.type + (s.status !== "OK" ? " err" : "") });
+    i.style.left = (100 * s.start_offset_ms / total) + "%";
+    i.style.width = (100 * (s.latency_ms || 0) / total) + "%";
+    bar.append(i);
+    const a = s.attributes || {};
+    const label = s.type === "LLM" ? `${a["llm.token_count.total"] ?? "?"} tokens · ${a["llm.finish_reason"] ?? ""}${a["llm.requested_tools"] ? " → " + a["llm.requested_tools"] : ""}`
+                : s.type === "RETRIEVER" ? `${a["retrieval.document_count"]} chunks from ${a["retrieval.store"]}` : s.name;
+    row.append(el("span", { class: "type" }, s.type), bar, el("span", { class: "ms" }, s.latency_ms + " ms"),
+               el("span", { class: "label" }, label));
+    tl.append(row);
+  });
+}
+
+async function send(text) {
+  const faults = [...document.querySelectorAll("#faults input:checked")].map((c) => c.value);
+  addMessage("user", text, faults.length ? "faults: " + faults.join(", ") : undefined);
+  const typing = el("div", { class: "typing", "data-testid": "typing-indicator" }, "Assistant is thinking…");
+  $("messages").append(typing); $("send").disabled = true;
+  try {
+    const headers = { "Content-Type": "application/json", "X-Debug-Trace": "true" };
+    if (faults.length) headers["X-Fault"] = faults.join(",");
+    const body = { input: text }; if (sessionId) body.session_id = sessionId;
+    const res = await fetch("/chat", { method: "POST", headers, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) {
+      addMessage("error", `${res.status} ${data.error}: ${data.message ?? ""}`.slice(0, 400),
+                 data.trace_id ? "trace_id " + data.trace_id : undefined);
+      return;
+    }
+    sessionId = data.session_id; $("session-id").textContent = sessionId.slice(0, 13) + "…";
+    $("session-id").title = sessionId;
+    addMessage("assistant", data.answer, `${data.trace.llm_calls} LLM calls · ${data.tool_calls.length} tools · ${data.trace.total_latency_ms} ms`);
+    renderTrace(data);
+  } catch (e) {
+    addMessage("error", "Could not reach the agent. Is it running on this port?");
+  } finally {
+    typing.remove(); $("send").disabled = false; $("chat-input").focus();
+  }
+}
+
+$("composer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = $("chat-input").value;
+  // Deliberately no client-side blocking of empty/long input: the API's 400 validation stays testable via the UI.
+  if (!text.length) { send(text); return; }
+  $("chat-input").value = ""; updateCounter(); send(text);
+});
+$("chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); }
+});
+function updateCounter() {
+  const n = $("chat-input").value.length;
+  $("counter").textContent = `${n}/${MAX}`; $("counter").classList.toggle("over", n > MAX);
+}
+$("chat-input").addEventListener("input", updateCounter);
+$("new-session").addEventListener("click", () => {
+  sessionId = null; $("session-id").textContent = "new";
+  $("messages").replaceChildren(el("div", { class: "muted", "data-testid": "new-session-notice" }, "New conversation started."));
+  $("trace-body").hidden = true; $("trace-empty").hidden = false;
+});
+$("reset-data").addEventListener("click", async () => {
+  const res = await fetch("/test/reset", { method: "POST" });
+  addMessage("assistant", res.ok ? "Store data reset to seed values." : "Reset failed (" + res.status + ").");
+});
+
+const sug = $("suggestions");
+SUGGESTIONS.forEach((s) => {
+  const b = el("button", { type: "button", "data-testid": "suggestion-chip" }, s);
+  b.addEventListener("click", () => send(s)); sug.append(b);
+});
+loadHealth();
+</script>
+</body>
+</html>

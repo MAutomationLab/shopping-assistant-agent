@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.qa</groupId>
+    <artifactId>shopping-assistant-agent</artifactId>
+    <version>0.1.0</version>
+    <name>shopping-assistant-agent</name>
+    <description>Real LangChain4j shopping assistant agent (System Under Test) with per-request tracing</description>
+
+    <properties>
+        <java.version>25</java.version>
+        <langchain4j.version>1.20.2</langchain4j.version>
+        <!-- LangChain4j integration modules that are still versioned as beta -->
+        <langchain4j-beta.version>1.20.2-beta30</langchain4j-beta.version>
+    </properties>
+
+    <dependencies>
+        <!-- REST API -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+
+        <!-- Agent: LangChain4j core + Gemini + in-process embeddings for RAG -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-google-ai-gemini</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
+            <version>${langchain4j-beta.version}</version>
+        </dependency>
+        <!-- RAG vector store: PostgreSQL + pgvector -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-pgvector</artifactId>
+            <version>${langchain4j-beta.version}</version>
+        </dependency>
+
+        <!-- Tracing: OpenTelemetry SDK + OTLP exporter (-> Arize Phoenix) -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- This network resets IPv6 TLS handshakes to Gemini; use IPv4 for mvn spring-boot:run -->
+                    <jvmArguments>-Djava.net.preferIPv4Addresses=true</jvmArguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

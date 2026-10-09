@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: shopping-assistant-agent
+  config:
+    # Local secrets (GOOGLE_API_KEY etc.) — .env is git-ignored
+    import: optional:file:.env[.properties]
+
+server:
+  port: ${AGENT_PORT:8085}
+
+agent:
+  gemini:
+    api-key: ${GOOGLE_API_KEY:}
+    model: ${AGENT_MODEL:gemini-3.8-flash}
+    temperature: 0.0          # deterministic-as-possible for testing
+    timeout-seconds: 60
+    max-retries: 2            # retries per LLM call on transient provider errors (429/503)
+    log-requests: false
+  memory:
+    max-messages: 20
+  rag:
+    max-results: 3
+    min-score: 0.6
+    store: ${RAG_STORE:pgvector}          # pgvector | in-memory
+    pgvector:
+      host: ${PGVECTOR_HOST:localhost}
+      port: ${PGVECTOR_PORT:5432}
+      database: ${PGVECTOR_DB:rag_db}
+      user: ${PGVECTOR_USER:rag_user}
+      password: ${PGVECTOR_PASSWORD:}     # set in .env
+      table: ${PGVECTOR_TABLE:shopping_policy_embeddings}
+      # Clear the table and re-embed policies/*.txt on every start.
+      # Keeps the store in sync with the policy files and prevents duplicate chunks.
+      reingest-on-startup: ${PGVECTOR_REINGEST:true}
+  budget:
+    max-tool-calls: 6         # hard guardrail against runaway tool loops
+  faults:
+    # Fault injection via X-Fault header. NEVER enable in production.
+    enabled: ${AGENT_FAULTS_ENABLED:true}
+  tracing:
+    # OTLP/HTTP endpoint for Arize Phoenix (docker compose up). Empty = in-app tracing only.
+    otlp-endpoint: ${OTLP_ENDPOINT:}
+    trace-store-size: 500     # how many traces GET /traces/{id} keeps in memory
