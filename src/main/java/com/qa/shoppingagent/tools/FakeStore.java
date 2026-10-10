@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Deterministic in-memory "backend" (catalog + orders). Seeded identically on startup and on
  * POST /test/reset so test runs are repeatable. Data mirrors datasets/shopping_assistant goldens.
+ *
  */
 @Component
 public class FakeStore {
